@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pemesanan Kamar Hotel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1rem;
+            background: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #007bff;
+        }
+        form {
+            background: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #ccc;
+        }
+        label {
+            display: block;
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.5rem;
+            margin-top: 0.3rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            margin-top: 1.5rem;
+            width: 100%;
+            padding: 0.7rem;
+            background: #007bff;
+            color: white;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+        .message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .price-summary {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .price-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        .total-price {
+            font-weight: bold;
+            font-size: 1.1rem;
+            border-top: 1px solid #ccc;
+            padding-top: 0.5rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pemesanan Kamar Hotel</h1>
+    <form id="bookingForm">
+        <label for="hotel">Pilih Hotel</label>
+        <select id="hotel" name="hotel" required>
+            <option value="">-- Pilih Hotel --</option>
+            <option value="Nawasena" data-price="500000">Nawasena - 2-3 pax (Rp 500.000/malam)</option>
+            <option value="Aruna" data-price="350000">Aruna - 2-3 pax (Rp 350.000/malam)</option>
+            <option value="Family Room (1)" data-price="250000">Family Room - 2-5 pax (Rp 250.000/malam)</option>
+            <option value="Family Room (2)" data-price="250000">Family Room - 2-5 pax (Rp 250.000/malam)</option>
+        </select>
+
+        <label for="checkin">Tanggal Check-in</label>
+        <input type="date" id="checkin" name="checkin" required />
+
+        <label for="checkout">Tanggal Check-out</label>
+        <input type="date" id="checkout" name="checkout" required />
+
+        <label for="rooms">Jumlah Kamar</label>
+        <input type="number" id="rooms" name="rooms" min="1" max="10" value="1" required />
+
+        <label for="guests">Jumlah Tamu</label>
+        <input type="number" id="guests" name="guests" min="1" max="10" value="1" required />
+
+        <label for="extrabed">Jumlah Extrabed</label>
+        <input type="number" id="extrabed" name="extrabed" min="0" max="5" value="0" required />
+
+        <label for="paymentMethod">Metode Pembayaran</label>
+        <select id="paymentMethod" name="paymentMethod" required>
+            <option value="">-- Pilih Metode Pembayaran --</option>
+            <option value="credit_card">Kartu Kredit</option>
+            <option value="bank_transfer">Transfer Bank</option>
+            <option value="e_wallet">E-Wallet</option>
+        </select>
+
+        <div id="priceSummary" class="price-summary" style="display: none;">
+            <h3>Ringkasan Harga</h3>
+            <div id="priceDetails"></div>
+            <div class="total-price" id="totalPrice"></div>
+        </div>
+
+        <button type="submit">Pesan Sekarang</button>
+    </form>
+
+    <div id="message" class="message" style="display:none;"></div>
+
+    <script>
+        const form = document.getElementById('bookingForm');
+        const messageDiv = document.getElementById('message');
+        const priceSummary = document.getElementById('priceSummary');
+        const priceDetails = document.getElementById('priceDetails');
+        const totalPrice = document.getElementById('totalPrice');
+
+        // Harga tetap
+        const EXTRABED_PRICE = 150000; // Rp 150.000 per extrabed
+
+        // Event listeners untuk menghitung harga otomatis
+        form.hotel.addEventListener('change', calculatePrice);
+        form.checkin.addEventListener('change', calculatePrice);
+        form.checkout.addEventListener('change', calculatePrice);
+        form.rooms.addEventListener('input', calculatePrice);
+        form.extrabed.addEventListener('input', calculatePrice);
+
+        function calculatePrice() {
+            const hotelSelect = form.hotel;
+            const selectedOption = hotelSelect.options[hotelSelect.selectedIndex];
+            const roomPrice = selectedOption ? parseInt(selectedOption.dataset.price || 0) : 0;
+            
+            const checkin = new Date(form.checkin.value);
+            const checkout = new Date(form.checkout.value);
+            const rooms = parseInt(form.rooms.value) || 0;
+            const extrabeds = parseInt(form.extrabed.value) || 0;
+
+            if (!form.hotel.value || !form.checkin.value || !form.checkout.value || checkout <= checkin) {
+                priceSummary.style.display = 'none';
+                return;
+            }
+
+            // Hitung jumlah malam
+            const nights = Math.ceil((checkout - checkin) / (1000 * 60 * 60 * 24));
+            
+            if (nights <= 0) {
+                priceSummary.style.display = 'none';
+                return;
+            }
+
+            // Hitung total harga
+            const roomTotal = roomPrice * rooms * nights;
+            const extrabedTotal = EXTRABED_PRICE * extrabeds * nights;
+            const total = roomTotal + extrabedTotal;
+
+            // Tampilkan ringkasan harga
+            priceDetails.innerHTML = `
+                <div class="price-item">
+                    <span>Kamar (${rooms} kamar × ${nights} malam)</span>
+                    <span>Rp ${roomTotal.toLocaleString('id-ID')}</span>
+                </div>
+                ${extrabeds > 0 ? `
+                <div class="price-item">
+                    <span>Extrabed (${extrabeds} × ${nights} malam)</span>
+                    <span>Rp ${extrabedTotal.toLocaleString('id-ID')}</span>
+                </div>
+                ` : ''}
+            `;
+
+            totalPrice.innerHTML = `
+                <div class="price-item">
+                    <span>Total</span>
+                    <span>Rp ${total.toLocaleString('id-ID')}</span>
+                </div>
+            `;
+
+            priceSummary.style.display = 'block';
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validasi tanggal check-in < check-out
+            const checkin = new Date(form.checkin.value);
+            const checkout = new Date(form.checkout.value);
+            if (checkout <= checkin) {
+                showMessage('Tanggal check-out harus lebih besar dari check-in.', 'error');
+                return;
+            }
+
+            // Validasi jumlah tamu vs jumlah kamar
+            const rooms = parseInt(form.rooms.value);
+            const guests = parseInt(form.guests.value);
+            const extrabeds = parseInt(form.extrabed.value);
+            
+            if (guests > rooms * 2 + extrabeds) {
+                showMessage('Jumlah tamu melebihi kapasitas kamar dan extrabed yang dipesan.', 'error');
+                return;
+            }
+
+            const data = {
+                hotel: form.hotel.value,
+                checkin: form.checkin.value,
+                checkout: form.checkout.value,
+                rooms: rooms,
+                guests: guests,
+                extrabed: extrabeds,
+                paymentMethod: form.paymentMethod.value,
+            };
+
+            try {
+                form.querySelector('button').disabled = true;
+                showMessage('Memproses pembayaran...', '');
+
+                const response = await fetch('http://localhost:3000/api/payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(`Pembayaran berhasil! Kode booking: ${result.bookingCode}`, 'success');
+                    form.reset();
+                    priceSummary.style.display = 'none';
+                } else {
+                    showMessage(result.message || 'Pembayaran gagal.', 'error');
+                }
+            } catch (error) {
+                showMessage('Terjadi kesalahan saat memproses pembayaran.', 'error');
+            } finally {
+                form.querySelector('button').disabled = false;
+            }
+        });
+
+        function showMessage(msg, type) {
+            messageDiv.textContent = msg;
+            messageDiv.className = 'message';
+            if (type === 'success') {
+                messageDiv.classList.add('success');
+            } else if (type === 'error') {
+                messageDiv.classList.add('error');
+            }
+            messageDiv.style.display = msg ? 'block' : 'none';
+        }
+
+        // Set tanggal minimum untuk check-in (hari ini)
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        form.checkin.min = today.toISOString().split('T')[0];
+        form.checkout.min = tomorrow.toISOString().split('T')[0];
+    </script>
+</body>
+</html>
